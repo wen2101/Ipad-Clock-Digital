@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<title>Retro Pixel Clock - Strong Pulse</title>
+<title>Retro Pixel Clock Final Ghost 88</title>
 <style>
 html,body{
   margin:0;
@@ -16,12 +16,7 @@ html,body{
   -webkit-user-select:none;
   -webkit-touch-callout:none;
 }
-#wrap{
-  position:absolute;
-  left:0; top:0; right:0; bottom:0;
-  background:#000;
-}
-canvas{
+#stage{
   position:absolute;
   left:50%;
   top:50%;
@@ -29,27 +24,106 @@ canvas{
   height:768px;
   margin-left:-512px;
   margin-top:-384px;
+  background:#000;
+  overflow:hidden;
   -webkit-transform-origin:50% 50%;
   transform-origin:50% 50%;
-  background:#000;
+}
+#ghostLayer,#activeLayer,#bottomLayer,#colonLayer{
+  position:absolute;
+  left:0;
+  top:0;
+  width:1024px;
+  height:768px;
+}
+.ghostPixel{
+  position:absolute;
+  width:32px;
+  height:32px;
+  background:rgba(0,95,95,.28);
+  box-shadow:0 0 5px rgba(0,120,120,.14);
+}
+.activePixel{
+  position:absolute;
+  width:32px;
+  height:32px;
+  background:#5CFFFF;
+  box-shadow:
+    0 0 8px rgba(80,255,255,.95),
+    0 0 18px rgba(0,220,220,.42);
+}
+.smallGhost{
+  position:absolute;
+  background:rgba(0,95,95,.22);
+}
+.smallActive{
+  position:absolute;
+  background:#5CFFFF;
+  box-shadow:
+    0 0 4px rgba(80,255,255,.90),
+    0 0 9px rgba(0,220,220,.35);
+}
+.colonGhost{
+  position:absolute;
+  width:32px;
+  height:32px;
+  background:rgba(0,95,95,.28);
+  box-shadow:0 0 5px rgba(0,120,120,.14);
+}
+.colonActive{
+  position:absolute;
+  width:32px;
+  height:32px;
+  background:#5CFFFF;
+  box-shadow:
+    0 0 8px rgba(80,255,255,.95),
+    0 0 18px rgba(0,220,220,.42);
+  -webkit-animation:colonPulse 1s ease-in-out infinite;
+  animation:colonPulse 1s ease-in-out infinite;
+}
+@-webkit-keyframes colonPulse{
+  0%{opacity:1}
+  50%{opacity:.08}
+  100%{opacity:1}
+}
+@keyframes colonPulse{
+  0%{opacity:1}
+  50%{opacity:.08}
+  100%{opacity:1}
 }
 </style>
 </head>
 <body>
-<div id="wrap"><canvas id="c" width="1024" height="768"></canvas></div>
+<div id="stage">
+  <div id="ghostLayer"></div>
+  <div id="activeLayer"></div>
+  <div id="colonLayer"></div>
+  <div id="bottomLayer"></div>
+</div>
 
 <script>
 (function(){
-  var canvas=document.getElementById('c');
-  var ctx=canvas.getContext('2d');
+  var stage=document.getElementById("stage");
+  var ghostLayer=document.getElementById("ghostLayer");
+  var activeLayer=document.getElementById("activeLayer");
+  var colonLayer=document.getElementById("colonLayer");
+  var bottomLayer=document.getElementById("bottomLayer");
 
-  var CYAN="#5CFFFF";
-  var SHADOW="rgba(0,115,115,.30)";
-  var GLOW1="rgba(80,255,255,.85)";
-  var GLOW2="rgba(0,220,220,.32)";
+  /* Fixed 5x9 matrix: every digit occupies the same exact slot */
+  var DIG={
+    "0":["01110","10001","10011","10101","10101","11001","10001","10001","01110"],
+    "1":["00100","01100","10100","00100","00100","00100","00100","00100","11111"],
+    "2":["01110","10001","00001","00001","00010","00100","01000","10000","11111"],
+    "3":["11110","00001","00001","00001","01110","00001","00001","00001","11110"],
+    "4":["00010","00110","01010","10010","10010","11111","00010","00010","00010"],
+    "5":["11111","10000","10000","10000","11110","00001","00001","00001","11110"],
+    "6":["01110","10000","10000","10000","11110","10001","10001","10001","01110"],
+    "7":["11111","00001","00010","00010","00100","00100","01000","01000","01000"],
+    "8":["01110","10001","10001","10001","01110","10001","10001","10001","01110"],
+    "9":["01110","10001","10001","10001","01111","00001","00001","00001","01110"]
+  };
 
-  /* bottom 5x7 bitmap font */
-  var F={
+  var FONT={
     "0":["01110","10001","10011","10101","11001","10001","01110"],
     "1":["00100","01100","00100","00100","00100","00100","01110"],
     "2":["01110","10001","00001","00010","00100","01000","11111"],
@@ -89,147 +163,119 @@ canvas{
     " ":["00000","00000","00000","00000","00000","00000","00000"]
   };
 
-  var SEG={
-    "0":[1,1,1,0,1,1,1],
-    "1":[0,0,1,0,0,1,0],
-    "2":[1,0,1,1,1,0,1],
-    "3":[1,0,1,1,0,1,1],
-    "4":[0,1,1,1,0,1,0],
-    "5":[1,1,0,1,0,1,1],
-    "6":[1,1,0,1,1,1,1],
-    "7":[1,0,1,0,0,1,0],
-    "8":[1,1,1,1,1,1,1],
-    "9":[1,1,1,1,0,1,1]
-  };
+  var CELL=34;
+  var TIME_Y=118;
+  var POS=[87,291,563,767];
 
-  function block(x,y,s,shadow){
-    if(shadow){
-      ctx.fillStyle=SHADOW;
-      ctx.fillRect(Math.round(x+s*.72),Math.round(y+s*.72),Math.round(s-2),Math.round(s-2));
-      return;
+  function add(layer,cls,x,y,w,h){
+    var e=document.createElement("div");
+    e.className=cls;
+    e.style.left=Math.round(x)+"px";
+    e.style.top=Math.round(y)+"px";
+    if(w){
+      e.style.width=Math.round(w)+"px";
+      e.style.height=Math.round(h)+"px";
     }
-    ctx.save();
-    ctx.shadowColor=GLOW1;
-    ctx.shadowBlur=8;
-    ctx.fillStyle=CYAN;
-    ctx.fillRect(Math.round(x),Math.round(y),Math.round(s-2),Math.round(s-2));
-    ctx.shadowBlur=16;
-    ctx.shadowColor=GLOW2;
-    ctx.fillRect(Math.round(x),Math.round(y),Math.round(s-2),Math.round(s-2));
-    ctx.restore();
+    layer.appendChild(e);
   }
 
-  function hseg(x,y,n,s){
+  function drawMatrix(layer,glyph,x,y,cls){
+    var r,c;
+    for(r=0;r<glyph.length;r++){
+      for(c=0;c<5;c++){
+        if(glyph[r].charAt(c)==="1"){
+          add(layer,cls,x+c*CELL,y+r*CELL);
+        }
+      }
+    }
+  }
+
+  /* TRUE retro ghost: faint 8 is permanently visible in every digit slot */
+  function drawGhost88(){
     var i;
-    for(i=0;i<n;i++){ block(x+i*s,y,s,true); }
-    for(i=0;i<n;i++){ block(x+i*s,y,s,false); }
-  }
-  function vseg(x,y,n,s){
-    var i;
-    for(i=0;i<n;i++){ block(x,y+i*s,s,true); }
-    for(i=0;i<n;i++){ block(x,y+i*s,s,false); }
+    for(i=0;i<4;i++){
+      drawMatrix(ghostLayer,DIG["8"],POS[i],TIME_Y,"ghostPixel");
+    }
   }
 
-  /* proportions tuned to match the approved final mockup on 1024x768 */
-  var CELL=25;
-  var DW=175;
-  var DH=350;
+  function drawTime(){
+    activeLayer.innerHTML="";
+    var d=new Date();
+    var hh=d.getHours(), mm=d.getMinutes();
+    var H=(hh<10?"0":"")+hh;
+    var M=(mm<10?"0":"")+mm;
 
-  function digit(ch,x,y){
-    var a=SEG[ch]||SEG["0"];
-    var topX=x+25, topY=y;
-    var midY=y+162;
-    var botY=y+324;
-    var leftX=x, rightX=x+150;
-
-    if(a[0]) hseg(topX,topY,5,CELL);
-    if(a[1]) vseg(leftX,y+25,5,CELL);
-    if(a[2]) vseg(rightX,y+25,5,CELL);
-    if(a[3]) hseg(topX,midY,5,CELL);
-    if(a[4]) vseg(leftX,midY+25,5,CELL);
-    if(a[5]) vseg(rightX,midY+25,5,CELL);
-    if(a[6]) hseg(topX,botY,5,CELL);
+    drawMatrix(activeLayer,DIG[H.charAt(0)],POS[0],TIME_Y,"activePixel");
+    drawMatrix(activeLayer,DIG[H.charAt(1)],POS[1],TIME_Y,"activePixel");
+    drawMatrix(activeLayer,DIG[M.charAt(0)],POS[2],TIME_Y,"activePixel");
+    drawMatrix(activeLayer,DIG[M.charAt(1)],POS[3],TIME_Y,"activePixel");
   }
 
-  function colon(x,y,pulse){
-    /* Shadow remains visible; only the bright cyan colon breathes. */
-    block(x,y+118,30,true);
-    block(x,y+220,30,true);
+  function drawColon(){
+    var x=496;
+    var y1=TIME_Y+96;
+    var y2=TIME_Y+204;
 
-    ctx.save();
-    ctx.globalAlpha = pulse;
-    block(x,y+118,30,false);
-    block(x,y+220,30,false);
-    ctx.restore();
+    add(colonLayer,"colonGhost",x,y1);
+    add(colonLayer,"colonGhost",x,y2);
+    add(colonLayer,"colonActive",x,y1);
+    add(colonLayer,"colonActive",x,y2);
   }
 
   function textWidth(txt,s){
-    if(!txt.length)return 0;
     return txt.length*5*s+(txt.length-1)*s;
   }
 
-  function smallText(txt,cx,y,s){
-    var w=textWidth(txt,s), start=cx-w/2;
-    var i,r,c,g,x;
+  function drawSmallText(txt,cx,y,s){
+    var start=cx-textWidth(txt,s)/2;
+    var i,r,c,g,x,yy;
     for(i=0;i<txt.length;i++){
-      g=F[txt.charAt(i)]||F[" "];
+      g=FONT[txt.charAt(i)]||FONT[" "];
       for(r=0;r<7;r++){
         for(c=0;c<5;c++){
           if(g[r].charAt(c)==="1"){
             x=start+i*6*s+c*s;
-            ctx.fillStyle="rgba(0,115,115,.25)";
-            ctx.fillRect(Math.round(x+s*.8),Math.round(y+r*s+s*.8),s-2,s-2);
-            ctx.save();
-            ctx.shadowColor=GLOW1;
-            ctx.shadowBlur=4;
-            ctx.fillStyle=CYAN;
-            ctx.fillRect(Math.round(x),Math.round(y+r*s),s-2,s-2);
-            ctx.restore();
+            yy=y+r*s;
+            add(bottomLayer,"smallGhost",x+s*.75,yy+s*.75,s-2,s-2);
+            add(bottomLayer,"smallActive",x,yy,s-2,s-2);
           }
         }
       }
     }
   }
 
-  function render(){
-    ctx.clearRect(0,0,1024,768);
-    ctx.fillStyle="#000";
-    ctx.fillRect(0,0,1024,768);
-
+  function drawBottom(){
+    bottomLayer.innerHTML="";
     var d=new Date();
-    var hh=d.getHours(), mm=d.getMinutes();
-    var H=(hh<10?"0":"")+hh, M=(mm<10?"0":"")+mm;
-
-    /* final layout: generous side margins, time centered, bottom row closer */
-    digit(H.charAt(0),60,115);
-    digit(H.charAt(1),255,115);
-    /* Strong, clearly visible smooth pulse: 100% -> 5% -> 100%. */
-    var t = (new Date().getTime() % 1000) / 1000;
-    var pulse = 0.05 + 0.95 * ((Math.cos(t * Math.PI * 2) + 1) / 2);
-    colon(487,115,pulse);
-    digit(M.charAt(0),590,115);
-    digit(M.charAt(1),785,115);
-
     var DAYS=["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
     var MON=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-    var dd=d.getDate(), date=(dd<10?"0":"")+dd;
+    var dd=d.getDate();
+    var ds=(dd<10?"0":"")+dd;
 
-    smallText(date,155,620,10);
-    smallText(DAYS[d.getDay()],512,634,6);
-    smallText(MON[d.getMonth()],869,620,10);
+    drawSmallText(ds,155,600,10);
+    drawSmallText(DAYS[d.getDay()],512,615,6);
+    drawSmallText(MON[d.getMonth()],869,600,10);
   }
 
   function fit(){
     var w=window.innerWidth||document.documentElement.clientWidth||1024;
     var h=window.innerHeight||document.documentElement.clientHeight||768;
     var s=Math.min(w/1024,h/768);
-    canvas.style.webkitTransform="scale("+s+")";
-    canvas.style.transform="scale("+s+")";
+    stage.style.webkitTransform="scale("+s+")";
+    stage.style.transform="scale("+s+")";
   }
 
+  drawGhost88();
+  drawColon();
+  drawTime();
+  drawBottom();
   fit();
-  render();
-  setInterval(render,33);
+
+  setInterval(function(){
+    drawTime();
+    drawBottom();
+  },1000);
+
   window.addEventListener("resize",fit,false);
   window.addEventListener("orientationchange",function(){setTimeout(fit,250);},false);
 })();
