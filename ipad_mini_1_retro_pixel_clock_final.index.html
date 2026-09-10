@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Retro Pixel Clock</title>
+<style>
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+#stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1024px;
+  height: 768px;
+  margin-left: -512px;
+  margin-top: -384px;
+  background: #000;
+  overflow: hidden;
+  -webkit-transform-origin: 50% 50%;
+  transform-origin: 50% 50%;
+}
+#clock {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1024px;
+  height: 768px;
+}
+.pixel {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  background: #55f7f7;
+  box-shadow:
+    0 0 7px rgba(60,255,255,.88),
+    0 0 15px rgba(0,210,210,.42);
+}
+.shadow {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  background: rgba(0,105,105,.34);
+}
+.smallpixel {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  background: #55f7f7;
+  box-shadow:
+    0 0 3px rgba(60,255,255,.85),
+    0 0 7px rgba(0,210,210,.35);
+}
+.smallshadow {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  background: rgba(0,105,105,.28);
+}
+#tapHint {
+  display:none;
+}
+</style>
+</head>
+<body>
+<div id="stage"><div id="clock"></div></div>
+
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var root = document.getElementById('clock');
+
+  /* 5x7 pixel font for the bottom row */
+  var FONT = {
+    "0":["01110","10001","10011","10101","11001","10001","01110"],
+    "1":["00100","01100","00100","00100","00100","00100","01110"],
+    "2":["01110","10001","00001","00010","00100","01000","11111"],
+    "3":["11110","00001","00001","01110","00001","00001","11110"],
+    "4":["00010","00110","01010","10010","11111","00010","00010"],
+    "5":["11111","10000","10000","11110","00001","00001","11110"],
+    "6":["01110","10000","10000","11110","10001","10001","01110"],
+    "7":["11111","00001","00010","00100","01000","01000","01000"],
+    "8":["01110","10001","10001","01110","10001","10001","01110"],
+    "9":["01110","10001","10001","01111","00001","00001","01110"],
+    "A":["01110","10001","10001","11111","10001","10001","10001"],
+    "B":["11110","10001","10001","11110","10001","10001","11110"],
+    "C":["01111","10000","10000","10000","10000","10000","01111"],
+    "D":["11110","10001","10001","10001","10001","10001","11110"],
+    "E":["11111","10000","10000","11110","10000","10000","11111"],
+    "F":["11111","10000","10000","11110","10000","10000","10000"],
+    "G":["01111","10000","10000","10111","10001","10001","01111"],
+    "H":["10001","10001","10001","11111","10001","10001","10001"],
+    "I":["11111","00100","00100","00100","00100","00100","11111"],
+    "J":["00111","00010","00010","00010","10010","10010","01100"],
+    "K":["10001","10010","10100","11000","10100","10010","10001"],
+    "L":["10000","10000","10000","10000","10000","10000","11111"],
+    "M":["10001","11011","10101","10101","10001","10001","10001"],
+    "N":["10001","11001","10101","10011","10001","10001","10001"],
+    "O":["01110","10001","10001","10001","10001","10001","01110"],
+    "P":["11110","10001","10001","11110","10000","10000","10000"],
+    "Q":["01110","10001","10001","10001","10101","10010","01101"],
+    "R":["11110","10001","10001","11110","10100","10010","10001"],
+    "S":["01111","10000","10000","01110","00001","00001","11110"],
+    "T":["11111","00100","00100","00100","00100","00100","00100"],
+    "U":["10001","10001","10001","10001","10001","10001","01110"],
+    "V":["10001","10001","10001","10001","10001","01010","00100"],
+    "W":["10001","10001","10001","10101","10101","10101","01010"],
+    "X":["10001","10001","01010","00100","01010","10001","10001"],
+    "Y":["10001","10001","01010","00100","00100","00100","00100"],
+    "Z":["11111","00001","00010","00100","01000","10000","11111"],
+    " ":["00000","00000","00000","00000","00000","00000","00000"]
+  };
+
+  /* 7-segment digit map */
+  var SEG = {
+    "0":[1,1,1,0,1,1,1],
+    "1":[0,0,1,0,0,1,0],
+    "2":[1,0,1,1,1,0,1],
+    "3":[1,0,1,1,0,1,1],
+    "4":[0,1,1,1,0,1,0],
+    "5":[1,1,0,1,0,1,1],
+    "6":[1,1,0,1,1,1,1],
+    "7":[1,0,1,0,0,1,0],
+    "8":[1,1,1,1,1,1,1],
+    "9":[1,1,1,1,0,1,1]
+  };
+
+  function addBlock(x, y, small, isShadow) {
+    var d = document.createElement('div');
+    d.className = small ? (isShadow ? 'smallshadow' : 'smallpixel') : (isShadow ? 'shadow' : 'pixel');
+    d.style.left = Math.round(x) + 'px';
+    d.style.top = Math.round(y) + 'px';
+    root.appendChild(d);
+  }
+
+  function horizontal(x, y, count, unit) {
+    var i;
+    for (i = 0; i < count; i++) {
+      addBlock(x + i*unit, y + unit, false, true);
+      addBlock(x + i*unit, y, false, false);
+    }
+  }
+
+  function vertical(x, y, count, unit) {
+    var i;
+    for (i = 0; i < count; i++) {
+      addBlock(x + unit, y + i*unit, false, true);
+      addBlock(x, y + i*unit, false, false);
+    }
+  }
+
+  function drawDigit(ch, x, y) {
+    var s = SEG[ch] || SEG["0"];
+    var u = 31, hCount = 7, vCount = 6;
+    var left = x, top = y;
+    var right = x + (hCount-1)*u;
+    var middle = y + vCount*u;
+    var bottom = y + vCount*u*2;
+
+    if (s[0]) horizontal(left+u, top, hCount-2, u);          // top
+    if (s[1]) vertical(left, top+u, vCount-1, u);            // upper left
+    if (s[2]) vertical(right, top+u, vCount-1, u);           // upper right
+    if (s[3]) horizontal(left+u, middle, hCount-2, u);       // middle
+    if (s[4]) vertical(left, middle+u, vCount-1, u);         // lower left
+    if (s[5]) vertical(right, middle+u, vCount-1, u);        // lower right
+    if (s[6]) horizontal(left+u, bottom, hCount-2, u);       // bottom
+  }
+
+  function drawColon(x, y) {
+    /* exact bright square colon, matching the approved visual */
+    addBlock(x+31, y+184, false, true);
+    addBlock(x,    y+153, false, false);
+    addBlock(x+31, y+277, false, true);
+    addBlock(x,    y+246, false, false);
+  }
+
+  function measureText(text, scale) {
+    var chars = text.length;
+    if (!chars) return 0;
+    return chars * 5 * scale + (chars - 1) * scale;
+  }
+
+  function drawSmallText(text, centerX, topY, scale) {
+    var total = measureText(text, scale);
+    var start = centerX - total/2;
+    var c, row, col, arr, x, y, shadowOffset = scale;
+    for (c = 0; c < text.length; c++) {
+      arr = FONT[text.charAt(c)] || FONT[" "];
+      for (row = 0; row < 7; row++) {
+        for (col = 0; col < 5; col++) {
+          if (arr[row].charAt(col) === "1") {
+            x = start + c*6*scale + col*scale;
+            y = topY + row*scale;
+            var sh = document.createElement('div');
+            sh.className = 'smallshadow';
+            sh.style.width = (scale-1) + 'px';
+            sh.style.height = (scale-1) + 'px';
+            sh.style.left = Math.round(x + shadowOffset) + 'px';
+            sh.style.top = Math.round(y + shadowOffset) + 'px';
+            root.appendChild(sh);
+            var p = document.createElement('div');
+            p.className = 'smallpixel';
+            p.style.width = (scale-1) + 'px';
+            p.style.height = (scale-1) + 'px';
+            p.style.left = Math.round(x) + 'px';
+            p.style.top = Math.round(y) + 'px';
+            root.appendChild(p);
+          }
+        }
+      }
+    }
+  }
+
+  function render() {
+    root.innerHTML = "";
+    var now = new Date();
+    var hh = now.getHours();
+    var mm = now.getMinutes();
+    var h = (hh < 10 ? "0" : "") + hh;
+    var m = (mm < 10 ? "0" : "") + mm;
+
+    /* Large time: sized specifically for 1024×768 iPad mini 1 landscape */
+    drawDigit(h.charAt(0), 39, 112);
+    drawDigit(h.charAt(1), 246, 112);
+    drawColon(485, 112);
+    drawDigit(m.charAt(0), 574, 112);
+    drawDigit(m.charAt(1), 781, 112);
+
+    var days = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
+    var months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    var dd = now.getDate();
+    var ds = (dd < 10 ? "0" : "") + dd;
+
+    /* Bottom row exactly: DATE — DAY — MONTH, no separators */
+    drawSmallText(ds, 170, 634, 11);
+    drawSmallText(days[now.getDay()], 512, 647, 7);
+    drawSmallText(months[now.getMonth()], 855, 634, 11);
+  }
+
+  function fitStage() {
+    var w = window.innerWidth || document.documentElement.clientWidth || 1024;
+    var h = window.innerHeight || document.documentElement.clientHeight || 768;
+    var scale = Math.min(w / 1024, h / 768);
+    stage.style.webkitTransform = "scale(" + scale + ")";
+    stage.style.transform = "scale(" + scale + ")";
+  }
+
+  /* Keep display awake as far as Safari permits; user should set Auto-Lock to Never. */
+  fitStage();
+  render();
+  setInterval(render, 1000);
+  window.addEventListener("resize", fitStage, false);
+  window.addEventListener("orientationchange", function () {
+    setTimeout(fitStage, 300);
+  }, false);
+
+  /* Double-tap enters fullscreen-ish standalone behavior when saved to Home Screen. */
+  var lastTap = 0;
+  document.addEventListener("touchend", function () {
+    var now = new Date().getTime();
+    if (now - lastTap < 350) {
+      window.scrollTo(0, 1);
+    }
+    lastTap = now;
+  }, false);
+})();
+</script>
+</body>
+</html>
