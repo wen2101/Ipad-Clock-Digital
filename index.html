@@ -5,86 +5,51 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<title>Retro Pixel Clock</title>
+<title>Retro Pixel Clock - Strong Pulse</title>
 <style>
-html, body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #000;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
 }
-body {
-  font-family: Arial, Helvetica, sans-serif;
+#wrap{
+  position:absolute;
+  left:0; top:0; right:0; bottom:0;
+  background:#000;
 }
-#stage {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 1024px;
-  height: 768px;
-  margin-left: -512px;
-  margin-top: -384px;
-  background: #000;
-  overflow: hidden;
-  -webkit-transform-origin: 50% 50%;
-  transform-origin: 50% 50%;
-}
-#clock {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 1024px;
-  height: 768px;
-}
-.pixel {
-  position: absolute;
-  width: 30px;
-  height: 30px;
-  background: #55f7f7;
-  box-shadow:
-    0 0 7px rgba(60,255,255,.88),
-    0 0 15px rgba(0,210,210,.42);
-}
-.shadow {
-  position: absolute;
-  width: 30px;
-  height: 30px;
-  background: rgba(0,105,105,.34);
-}
-.smallpixel {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  background: #55f7f7;
-  box-shadow:
-    0 0 3px rgba(60,255,255,.85),
-    0 0 7px rgba(0,210,210,.35);
-}
-.smallshadow {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  background: rgba(0,105,105,.28);
-}
-#tapHint {
-  display:none;
+canvas{
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:1024px;
+  height:768px;
+  margin-left:-512px;
+  margin-top:-384px;
+  -webkit-transform-origin:50% 50%;
+  transform-origin:50% 50%;
+  background:#000;
 }
 </style>
 </head>
 <body>
-<div id="stage"><div id="clock"></div></div>
+<div id="wrap"><canvas id="c" width="1024" height="768"></canvas></div>
 
 <script>
-(function () {
-  var stage = document.getElementById('stage');
-  var root = document.getElementById('clock');
+(function(){
+  var canvas=document.getElementById('c');
+  var ctx=canvas.getContext('2d');
 
-  /* 5x7 pixel font for the bottom row */
-  var FONT = {
+  var CYAN="#5CFFFF";
+  var SHADOW="rgba(0,115,115,.30)";
+  var GLOW1="rgba(80,255,255,.85)";
+  var GLOW2="rgba(0,220,220,.32)";
+
+  /* bottom 5x7 bitmap font */
+  var F={
     "0":["01110","10001","10011","10101","11001","10001","01110"],
     "1":["00100","01100","00100","00100","00100","00100","01110"],
     "2":["01110","10001","00001","00010","00100","01000","11111"],
@@ -124,8 +89,7 @@ body {
     " ":["00000","00000","00000","00000","00000","00000","00000"]
   };
 
-  /* 7-segment digit map */
-  var SEG = {
+  var SEG={
     "0":[1,1,1,0,1,1,1],
     "1":[0,0,1,0,0,1,0],
     "2":[1,0,1,1,1,0,1],
@@ -138,144 +102,136 @@ body {
     "9":[1,1,1,1,0,1,1]
   };
 
-  function addBlock(x, y, small, isShadow) {
-    var d = document.createElement('div');
-    d.className = small ? (isShadow ? 'smallshadow' : 'smallpixel') : (isShadow ? 'shadow' : 'pixel');
-    d.style.left = Math.round(x) + 'px';
-    d.style.top = Math.round(y) + 'px';
-    root.appendChild(d);
-  }
-
-  function horizontal(x, y, count, unit) {
-    var i;
-    for (i = 0; i < count; i++) {
-      addBlock(x + i*unit, y + unit, false, true);
-      addBlock(x + i*unit, y, false, false);
+  function block(x,y,s,shadow){
+    if(shadow){
+      ctx.fillStyle=SHADOW;
+      ctx.fillRect(Math.round(x+s*.72),Math.round(y+s*.72),Math.round(s-2),Math.round(s-2));
+      return;
     }
+    ctx.save();
+    ctx.shadowColor=GLOW1;
+    ctx.shadowBlur=8;
+    ctx.fillStyle=CYAN;
+    ctx.fillRect(Math.round(x),Math.round(y),Math.round(s-2),Math.round(s-2));
+    ctx.shadowBlur=16;
+    ctx.shadowColor=GLOW2;
+    ctx.fillRect(Math.round(x),Math.round(y),Math.round(s-2),Math.round(s-2));
+    ctx.restore();
   }
 
-  function vertical(x, y, count, unit) {
+  function hseg(x,y,n,s){
     var i;
-    for (i = 0; i < count; i++) {
-      addBlock(x + unit, y + i*unit, false, true);
-      addBlock(x, y + i*unit, false, false);
-    }
+    for(i=0;i<n;i++){ block(x+i*s,y,s,true); }
+    for(i=0;i<n;i++){ block(x+i*s,y,s,false); }
+  }
+  function vseg(x,y,n,s){
+    var i;
+    for(i=0;i<n;i++){ block(x,y+i*s,s,true); }
+    for(i=0;i<n;i++){ block(x,y+i*s,s,false); }
   }
 
-  function drawDigit(ch, x, y) {
-    var s = SEG[ch] || SEG["0"];
-    var u = 31, hCount = 7, vCount = 6;
-    var left = x, top = y;
-    var right = x + (hCount-1)*u;
-    var middle = y + vCount*u;
-    var bottom = y + vCount*u*2;
+  /* proportions tuned to match the approved final mockup on 1024x768 */
+  var CELL=25;
+  var DW=175;
+  var DH=350;
 
-    if (s[0]) horizontal(left+u, top, hCount-2, u);          // top
-    if (s[1]) vertical(left, top+u, vCount-1, u);            // upper left
-    if (s[2]) vertical(right, top+u, vCount-1, u);           // upper right
-    if (s[3]) horizontal(left+u, middle, hCount-2, u);       // middle
-    if (s[4]) vertical(left, middle+u, vCount-1, u);         // lower left
-    if (s[5]) vertical(right, middle+u, vCount-1, u);        // lower right
-    if (s[6]) horizontal(left+u, bottom, hCount-2, u);       // bottom
+  function digit(ch,x,y){
+    var a=SEG[ch]||SEG["0"];
+    var topX=x+25, topY=y;
+    var midY=y+162;
+    var botY=y+324;
+    var leftX=x, rightX=x+150;
+
+    if(a[0]) hseg(topX,topY,5,CELL);
+    if(a[1]) vseg(leftX,y+25,5,CELL);
+    if(a[2]) vseg(rightX,y+25,5,CELL);
+    if(a[3]) hseg(topX,midY,5,CELL);
+    if(a[4]) vseg(leftX,midY+25,5,CELL);
+    if(a[5]) vseg(rightX,midY+25,5,CELL);
+    if(a[6]) hseg(topX,botY,5,CELL);
   }
 
-  function drawColon(x, y) {
-    /* exact bright square colon, matching the approved visual */
-    addBlock(x+31, y+184, false, true);
-    addBlock(x,    y+153, false, false);
-    addBlock(x+31, y+277, false, true);
-    addBlock(x,    y+246, false, false);
+  function colon(x,y,pulse){
+    /* Shadow remains visible; only the bright cyan colon breathes. */
+    block(x,y+118,30,true);
+    block(x,y+220,30,true);
+
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    block(x,y+118,30,false);
+    block(x,y+220,30,false);
+    ctx.restore();
   }
 
-  function measureText(text, scale) {
-    var chars = text.length;
-    if (!chars) return 0;
-    return chars * 5 * scale + (chars - 1) * scale;
+  function textWidth(txt,s){
+    if(!txt.length)return 0;
+    return txt.length*5*s+(txt.length-1)*s;
   }
 
-  function drawSmallText(text, centerX, topY, scale) {
-    var total = measureText(text, scale);
-    var start = centerX - total/2;
-    var c, row, col, arr, x, y, shadowOffset = scale;
-    for (c = 0; c < text.length; c++) {
-      arr = FONT[text.charAt(c)] || FONT[" "];
-      for (row = 0; row < 7; row++) {
-        for (col = 0; col < 5; col++) {
-          if (arr[row].charAt(col) === "1") {
-            x = start + c*6*scale + col*scale;
-            y = topY + row*scale;
-            var sh = document.createElement('div');
-            sh.className = 'smallshadow';
-            sh.style.width = (scale-1) + 'px';
-            sh.style.height = (scale-1) + 'px';
-            sh.style.left = Math.round(x + shadowOffset) + 'px';
-            sh.style.top = Math.round(y + shadowOffset) + 'px';
-            root.appendChild(sh);
-            var p = document.createElement('div');
-            p.className = 'smallpixel';
-            p.style.width = (scale-1) + 'px';
-            p.style.height = (scale-1) + 'px';
-            p.style.left = Math.round(x) + 'px';
-            p.style.top = Math.round(y) + 'px';
-            root.appendChild(p);
+  function smallText(txt,cx,y,s){
+    var w=textWidth(txt,s), start=cx-w/2;
+    var i,r,c,g,x;
+    for(i=0;i<txt.length;i++){
+      g=F[txt.charAt(i)]||F[" "];
+      for(r=0;r<7;r++){
+        for(c=0;c<5;c++){
+          if(g[r].charAt(c)==="1"){
+            x=start+i*6*s+c*s;
+            ctx.fillStyle="rgba(0,115,115,.25)";
+            ctx.fillRect(Math.round(x+s*.8),Math.round(y+r*s+s*.8),s-2,s-2);
+            ctx.save();
+            ctx.shadowColor=GLOW1;
+            ctx.shadowBlur=4;
+            ctx.fillStyle=CYAN;
+            ctx.fillRect(Math.round(x),Math.round(y+r*s),s-2,s-2);
+            ctx.restore();
           }
         }
       }
     }
   }
 
-  function render() {
-    root.innerHTML = "";
-    var now = new Date();
-    var hh = now.getHours();
-    var mm = now.getMinutes();
-    var h = (hh < 10 ? "0" : "") + hh;
-    var m = (mm < 10 ? "0" : "") + mm;
+  function render(){
+    ctx.clearRect(0,0,1024,768);
+    ctx.fillStyle="#000";
+    ctx.fillRect(0,0,1024,768);
 
-    /* Large time: sized specifically for 1024×768 iPad mini 1 landscape */
-    drawDigit(h.charAt(0), 39, 112);
-    drawDigit(h.charAt(1), 246, 112);
-    drawColon(485, 112);
-    drawDigit(m.charAt(0), 574, 112);
-    drawDigit(m.charAt(1), 781, 112);
+    var d=new Date();
+    var hh=d.getHours(), mm=d.getMinutes();
+    var H=(hh<10?"0":"")+hh, M=(mm<10?"0":"")+mm;
 
-    var days = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
-    var months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-    var dd = now.getDate();
-    var ds = (dd < 10 ? "0" : "") + dd;
+    /* final layout: generous side margins, time centered, bottom row closer */
+    digit(H.charAt(0),60,115);
+    digit(H.charAt(1),255,115);
+    /* Strong, clearly visible smooth pulse: 100% -> 5% -> 100%. */
+    var t = (new Date().getTime() % 1000) / 1000;
+    var pulse = 0.05 + 0.95 * ((Math.cos(t * Math.PI * 2) + 1) / 2);
+    colon(487,115,pulse);
+    digit(M.charAt(0),590,115);
+    digit(M.charAt(1),785,115);
 
-    /* Bottom row exactly: DATE — DAY — MONTH, no separators */
-    drawSmallText(ds, 170, 634, 11);
-    drawSmallText(days[now.getDay()], 512, 647, 7);
-    drawSmallText(months[now.getMonth()], 855, 634, 11);
+    var DAYS=["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
+    var MON=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    var dd=d.getDate(), date=(dd<10?"0":"")+dd;
+
+    smallText(date,155,620,10);
+    smallText(DAYS[d.getDay()],512,634,6);
+    smallText(MON[d.getMonth()],869,620,10);
   }
 
-  function fitStage() {
-    var w = window.innerWidth || document.documentElement.clientWidth || 1024;
-    var h = window.innerHeight || document.documentElement.clientHeight || 768;
-    var scale = Math.min(w / 1024, h / 768);
-    stage.style.webkitTransform = "scale(" + scale + ")";
-    stage.style.transform = "scale(" + scale + ")";
+  function fit(){
+    var w=window.innerWidth||document.documentElement.clientWidth||1024;
+    var h=window.innerHeight||document.documentElement.clientHeight||768;
+    var s=Math.min(w/1024,h/768);
+    canvas.style.webkitTransform="scale("+s+")";
+    canvas.style.transform="scale("+s+")";
   }
 
-  /* Keep display awake as far as Safari permits; user should set Auto-Lock to Never. */
-  fitStage();
+  fit();
   render();
-  setInterval(render, 1000);
-  window.addEventListener("resize", fitStage, false);
-  window.addEventListener("orientationchange", function () {
-    setTimeout(fitStage, 300);
-  }, false);
-
-  /* Double-tap enters fullscreen-ish standalone behavior when saved to Home Screen. */
-  var lastTap = 0;
-  document.addEventListener("touchend", function () {
-    var now = new Date().getTime();
-    if (now - lastTap < 350) {
-      window.scrollTo(0, 1);
-    }
-    lastTap = now;
-  }, false);
+  setInterval(render,33);
+  window.addEventListener("resize",fit,false);
+  window.addEventListener("orientationchange",function(){setTimeout(fit,250);},false);
 })();
 </script>
 </body>
